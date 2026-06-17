@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPS Link Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 40px 16px; color: #1a2233; }
+  .card { background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); padding: 40px 36px; width: 100%; max-width: 600px; }
+  .header { display: flex; align-items: center; gap: 14px; margin-bottom: 28px; }
+  .header-icon { background: #4B1E78; border-radius: 12px; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  h1 { font-size: 1.3rem; font-weight: 700; color: #4B1E78; line-height: 1.2; }
+  h1 span { display: block; font-size: 0.82rem; font-weight: 400; color: #6b7a99; margin-top: 2px; }
+
+  .drop-zone {
+    border: 2.5px dashed #c0aad8;
+    border-radius: 12px;
+    padding: 48px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #faf8fd;
+    margin-bottom: 20px;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #4B1E78; background: #f3eeff; }
+  .drop-zone svg { margin-bottom: 12px; }
+  .drop-zone p { color: #6b7a99; font-size: 0.95rem; }
+  .drop-zone p strong { color: #4B1E78; }
+  .drop-zone p.small { font-size: 0.8rem; margin-top: 6px; color: #aaa; }
+
+  #fileInput { display: none; }
+
+  .file-chosen { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #f3eeff; border-radius: 8px; margin-bottom: 20px; display: none; }
+  .file-chosen svg { flex-shrink: 0; }
+  .file-chosen span { font-size: 0.9rem; color: #4B1E78; font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-chosen .remove { cursor: pointer; color: #aaa; font-size: 1.1rem; flex-shrink: 0; }
+  .file-chosen .remove:hover { color: #c0392b; }
+
+  .btn { width: 100%; border: none; border-radius: 8px; padding: 13px; font-size: 1rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: background 0.2s; }
+  .btn-purple { background: #4B1E78; color: #fff; }
+  .btn-purple:hover:not(:disabled) { background: #3a1660; }
+  .btn-purple:disabled { background: #b0a0c8; cursor: not-allowed; }
+  .btn-green { background: #1a7a40; color: #fff; margin-top: 14px; }
+  .btn-green:hover { background: #145e30; }
+
+  .status { margin-top: 20px; padding: 12px 16px; border-radius: 8px; font-size: 0.92rem; display: none; }
+  .status.info    { background: #f0eaff; color: #4B1E78; }
+  .status.success { background: #e6f9ee; color: #1a7a40; }
+  .status.error   { background: #fdeaea; color: #c0392b; }
+
+  .preview { margin-top: 24px; display: none; }
+  .preview h3 { font-size: 0.95rem; font-weight: 600; color: #444; margin-bottom: 10px; }
+  .preview-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .preview-table th { background: #4B1E78; color: #fff; padding: 8px 10px; text-align: left; }
+  .preview-table td { padding: 7px 10px; border-bottom: 1px solid #e0e7f0; }
+  .preview-table tr:nth-child(even) td { background: #faf8fd; }
+  .preview-table td.link { color: #0078d4; font-family: monospace; font-size: 0.75rem; word-break: break-all; }
+  .preview-more { font-size: 0.8rem; color: #999; text-align: center; margin-top: 8px; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { width: 18px; height: 18px; border: 2px solid white; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="header-icon">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect x="2" y="6" width="24" height="16" rx="3" stroke="white" stroke-width="2" fill="none"/>
+        <path d="M8 12h12M8 16h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="22" cy="8" r="5" fill="#FFB900"/>
+        <path d="M20 8l1.5 1.5L24 6.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1>UPS Link Generator<span>Wgraj raport → pobierz z linkami do śledzenia</span></h1>
+  </div>
+
+  <!-- Drop zone -->
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <rect x="4" y="8" width="40" height="32" rx="4" fill="#f3eeff" stroke="#c0aad8" stroke-width="2"/>
+      <path d="M16 20h16M16 26h10" stroke="#c0aad8" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="36" cy="14" r="8" fill="#4B1E78"/>
+      <path d="M36 10v8M32 14h8" stroke="white" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <p><strong>Kliknij lub przeciągnij plik tutaj</strong></p>
+    <p class="small">Obsługiwane formaty: .xlsx, .xls, .csv</p>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFile(this.files[0])"/>
+
+  <!-- File chosen -->
+  <div class="file-chosen" id="fileChosen">
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <rect x="2" y="2" width="16" height="16" rx="2" fill="#4B1E78" opacity="0.1"/>
+      <path d="M6 7h8M6 10h8M6 13h5" stroke="#4B1E78" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <span id="fileName">plik.xlsx</span>
+    <span class="remove" onclick="clearFile()">✕</span>
+  </div>
+
+  <button class="btn btn-purple" id="runBtn" onclick="processFile()" disabled>
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="white" stroke-width="2"/><path d="M7 6l5 3-5 3V6z" fill="white"/></svg>
+    Dodaj linki UPS i pobierz Excel
+  </button>
+
+  <div class="status" id="status"></div>
+
+  <div class="preview" id="preview">
+    <h3>Podgląd — znalezione numery tracking:</h3>
+    <table class="preview-table" id="previewTable"></table>
+    <div class="preview-more" id="previewMore"></div>
+    <button class="btn btn-green" id="downloadBtn" onclick="downloadResult()">
+      ⬇️ Pobierz plik Excel z linkami
+    </button>
+  </div>
+</div>
+
+<script>
+  let workbook = null;
+  let resultWorkbook = null;
+
+  // Drag & drop
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag-over'); if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]); });
+
+  function handleFile(file) {
+    if (!file) return;
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileChosen').style.display = 'flex';
+    document.getElementById('dropZone').style.display = 'none';
+    document.getElementById('runBtn').disabled = false;
+    document.getElementById('status').style.display = 'none';
+    document.getElementById('preview').style.display = 'none';
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      workbook = XLSX.read(e.target.result, { type: 'binary' });
+    };
+    reader.readAsBinaryString(file);
+  }
+
+  function clearFile() {
+    workbook = null;
+    resultWorkbook = null;
+    document.getElementById('fileInput').value = '';
+    document.getElementById('fileChosen').style.display = 'none';
+    document.getElementById('dropZone').style.display = 'block';
+    document.getElementById('runBtn').disabled = true;
+    document.getElementById('status').style.display = 'none';
+    document.getElementById('preview').style.display = 'none';
+  }
+
+  function showStatus(msg, type) {
+    const el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = `status ${type}`;
+    el.style.display = 'block';
+  }
+
+  function buildLink(trackingNum) {
+    return `https://www.ups.com/track?loc=en_US&tracknum=${trackingNum}&requester=ST/`;
+  }
+
+  function isTrackingNumber(val) {
+    if (!val) return false;
+    const s = String(val).trim();
+    return /^1Z[A-Z0-9]{16}$/i.test(s) || /^\d{12,22}$/.test(s);
+  }
+
+  function processFile() {
+    if (!workbook) { showStatus('Najpierw wgraj plik!', 'error'); return; }
+
+    const btn = document.getElementById('runBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="spinner"></div> Przetwarzam...';
+
+    setTimeout(() => {
+      try {
+        resultWorkbook = XLSX.utils.book_new();
+        let totalLinks = 0;
+        let previewRows = [];
+
+        workbook.SheetNames.forEach(sheetName => {
+          const ws = workbook.Sheets[sheetName];
+          const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+          if (data.length === 0) {
+            XLSX.utils.book_append_sheet(resultWorkbook, ws, sheetName);
+            return;
+          }
+
+          // Find Tracking # column
+          const headerRow = data.findIndex(row =>
+            row.some(cell => String(cell).toLowerCase().includes('tracking'))
+          );
+
+          let trackingColIdx = -1;
+          if (headerRow >= 0) {
+            trackingColIdx = data[headerRow].findIndex(cell =>
+              String(cell).toLowerCase().includes('tracking')
+            );
+          }
+
+          // If no header found, try to auto-detect column with 1Z tracking numbers
+          if (trackingColIdx === -1) {
+            for (let col = 0; col < (data[0] || []).length; col++) {
+              const vals = data.slice(1, 10).map(r => r[col]);
+              if (vals.some(v => isTrackingNumber(v))) {
+                trackingColIdx = col;
+                break;
+              }
+            }
+          }
+
+          if (trackingColIdx === -1) {
+            XLSX.utils.book_append_sheet(resultWorkbook, ws, sheetName);
+            return;
+          }
+
+          // Add link column header
+          const linkColIdx = data[headerRow >= 0 ? headerRow : 0].length;
+          if (headerRow >= 0) {
+            data[headerRow].push('UPS Tracking Link');
+          }
+
+          // Add links for each row
+          const startRow = headerRow >= 0 ? headerRow + 1 : 1;
+          for (let i = startRow; i < data.length; i++) {
+            const trackVal = String(data[i][trackingColIdx] || '').trim();
+            if (isTrackingNumber(trackVal)) {
+              const link = buildLink(trackVal);
+              data[i][linkColIdx] = link;
+              totalLinks++;
+              if (previewRows.length < 5) {
+                previewRows.push({ tracking: trackVal, link, sheet: sheetName });
+              }
+            } else {
+              data[i][linkColIdx] = '';
+            }
+          }
+
+          const newWs = XLSX.utils.aoa_to_sheet(data);
+
+          // Style the link column blue (best effort with xlsx)
+          const range = XLSX.utils.decode_range(newWs['!ref'] || 'A1');
+          const linkColLetter = XLSX.utils.encode_col(linkColIdx);
+          for (let r = startRow; r <= range.e.r; r++) {
+            const cellRef = linkColLetter + (r + 1);
+            if (newWs[cellRef] && newWs[cellRef].v) {
+              newWs[cellRef].l = { Target: newWs[cellRef].v };
+            }
+          }
+
+          // Auto column width
+          const colWidths = data[0].map((_, ci) => {
+            const maxLen = data.reduce((max, row) => Math.max(max, String(row[ci] || '').length), 10);
+            return { wch: Math.min(maxLen + 2, ci === linkColIdx ? 70 : 40) };
+          });
+          newWs['!cols'] = colWidths;
+
+          XLSX.utils.book_append_sheet(resultWorkbook, newWs, sheetName);
+        });
+
+        if (totalLinks === 0) {
+          showStatus('Nie znaleziono żadnych numerów tracking w pliku. Upewnij się że kolumna nazywa się "Tracking #".', 'error');
+          btn.disabled = false;
+          btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="white" stroke-width="2"/><path d="M7 6l5 3-5 3V6z" fill="white"/></svg> Dodaj linki UPS i pobierz Excel';
+          return;
+        }
+
+        showStatus(`✓ Gotowe! Dodano ${totalLinks} linków do śledzenia.`, 'success');
+
+        // Preview
+        const tbl = document.getElementById('previewTable');
+        tbl.innerHTML = `<tr><th>Tracking Number</th><th>Link</th></tr>` +
+          previewRows.map(r => `<tr><td><strong>${r.tracking}</strong></td><td class="link"><a href="${r.link}" target="_blank">${r.link}</a></td></tr>`).join('');
+        if (totalLinks > 5) {
+          document.getElementById('previewMore').textContent = `... i jeszcze ${totalLinks - 5} więcej`;
+        }
+        document.getElementById('preview').style.display = 'block';
+
+      } catch(e) {
+        showStatus('Błąd: ' + e.message, 'error');
+      }
+
+      btn.disabled = false;
+      btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="white" stroke-width="2"/><path d="M7 6l5 3-5 3V6z" fill="white"/></svg> Dodaj linki UPS i pobierz Excel';
+    }, 100);
+  }
+
+  function downloadResult() {
+    if (!resultWorkbook) return;
+    const origName = document.getElementById('fileName').textContent.replace(/\.[^.]+$/, '');
+    XLSX.writeFile(resultWorkbook, `${origName}_z_linkami.xlsx`);
+  }
+</script>
+</body>
+</html>
